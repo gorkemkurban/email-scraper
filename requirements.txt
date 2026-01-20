@@ -1,0 +1,20 @@
+# Email Scraper Requirements
+
+# Excel işlemleri
+pandas==2.1.4
+openpyxl==3.1.2
+
+# Web scraping
+requests==2.31.0
+beautifulsoup4==4.12.2
+lxml==4.9.4
+
+# Dil tespiti
+langdetect==1.0.9
+
+# Email validasyon
+email-validator==2.1.0
+
+# Opsiyonel: JavaScript'li siteler için
+# selenium==4.16.0
+# webdriver-manager==4.0.1
