@@ -31,28 +31,35 @@ class ExcelHandler:
             logger.error(f"Failed to get sheet names: {e}")
             return []
     
-    def read_excel(self, sheet_name=None) -> pd.DataFrame:
+    def read_excel(self, sheet_name=None, preserve_structure=False) -> pd.DataFrame:
         """
         Reads Excel file (single or multi-sheet)
         
         Args:
             sheet_name: Sheet name or index. None reads first sheet.
+            preserve_structure: If True, reads without interpreting headers (preserves all rows)
         
         Returns:
             pandas DataFrame
         """
         try:
+            read_kwargs = {}
+            if preserve_structure:
+                # Read without interpreting first row as header
+                read_kwargs['header'] = None
+            
             if sheet_name is None:
                 # Read first sheet
-                self.df = pd.read_excel(self.file_path)
+                self.df = pd.read_excel(self.file_path, **read_kwargs)
                 logger.info(f"Excel file read: {self.file_path} ({len(self.df)} rows)")
             else:
                 # Read specified sheet
-                self.df = pd.read_excel(self.file_path, sheet_name=sheet_name)
-                logger.info(f"Excel sheet '{sheet_name}' read: {len(self.df)} rows")
+                self.df = pd.read_excel(self.file_path, sheet_name=sheet_name, **read_kwargs)
+                logger.info(f"Excel sheet '{sheet_name}' read: {len(self.df)} rows)")
             
-            # Normalize column names (different sheets may have different names)
-            self._normalize_column_names()
+            # Normalize column names only if not preserving structure
+            if not preserve_structure:
+                self._normalize_column_names()
             
             return self.df
         except Exception as e:
@@ -152,9 +159,12 @@ class ExcelHandler:
             logger.error(f"Multi-sheet Excel writing error: {e}")
             raise
     
-    def get_websites(self) -> List[Dict]:
+    def get_websites(self, detect_header=True) -> List[Dict]:
         """
         Extracts website information from Excel
+        
+        Args:
+            detect_header: If True, tries to detect header row and column positions
         
         Returns:
             List of dicts containing website information
@@ -162,6 +172,91 @@ class ExcelHandler:
         if self.df is None:
             raise ValueError("Call read_excel() method first")
         
+        results = []
+        
+        # If columns are numeric (header=None mode), detect structure
+        if detect_header and all(isinstance(col, int) for col in self.df.columns):
+            website_col_idx, email_col_idx, company_col_idx = self._detect_columns()
+            
+            if website_col_idx is None or email_col_idx is None:
+                logger.warning("Could not detect Website/Email columns, using standard mode")
+                return self._get_websites_standard()
+            
+            logger.info(f"Detected columns - Website: {website_col_idx}, Email: {email_col_idx}, Company: {company_col_idx}")
+            
+            # Process rows
+            for idx, row in self.df.iterrows():
+                # Skip header row (typically first row)
+                if idx == 0:
+                    continue
+                
+                website = str(row.iloc[website_col_idx] if website_col_idx < len(row) else '').strip()
+                email = str(row.iloc[email_col_idx] if email_col_idx < len(row) else '').strip()
+                company = str(row.iloc[company_col_idx] if company_col_idx is not None and company_col_idx < len(row) else '').strip()
+                
+                # Skip if this looks like a header or separator row
+                if self._is_header_or_separator_row(row):
+                    continue
+                
+                # If website exists and email is empty/missing
+                if website and website not in ['nan', '', 'Website', 'Websites']:
+                    if not email or email in ['nan', '', 'Email', 'E-Posta']:
+                        results.append({
+                            'index': idx,
+                            'company': company,
+                            'website': website,
+                            'current_email': email,
+                            'email_col_idx': email_col_idx
+                        })
+        else:
+            return self._get_websites_standard()
+        
+        logger.info(f"Found {len(results)} websites with missing emails")
+        return results
+    
+    def _detect_columns(self):
+        """Detects Website, Email, and Company columns in numeric-indexed DataFrame"""
+        website_col = None
+        email_col = None
+        company_col = None
+        
+        # Check first row for headers
+        if len(self.df) > 0:
+            first_row = self.df.iloc[0]
+            for col_idx, val in enumerate(first_row):
+                val_str = str(val).strip().lower()
+                
+                # Website detection
+                if 'website' in val_str or 'web' in val_str:
+                    website_col = col_idx
+                # Email detection  
+                elif 'email' in val_str or 'e-posta' in val_str or 'mail' in val_str:
+                    email_col = col_idx
+                # Company detection
+                elif 'firma' in val_str or 'company' in val_str or 'şirket' in val_str:
+                    company_col = col_idx
+        
+        return website_col, email_col, company_col
+    
+    def _is_header_or_separator_row(self, row) -> bool:
+        """Checks if row is a header or separator (city name, etc.)"""
+        # Count how many cells are empty
+        non_empty = sum(1 for val in row if str(val).strip() not in ['', 'nan', 'None'])
+        
+        # If only 1-2 cells have data, likely a separator row
+        if non_empty <= 2:
+            return True
+        
+        # Check if row contains header-like text
+        for val in row:
+            val_str = str(val).strip().lower()
+            if val_str in ['firma adı', 'company name', 'website', 'email', 'e-posta', 'telefon', 'phone']:
+                return True
+        
+        return False
+    
+    def _get_websites_standard(self) -> List[Dict]:
+        """Standard website extraction (for named columns)"""
         results = []
         website_col = EXCEL_COLUMNS['website']
         email_col = EXCEL_COLUMNS['email']
@@ -180,20 +275,26 @@ class ExcelHandler:
                     'current_email': email
                 })
         
-        logger.info(f"Found {len(results)} websites with missing emails")
         return results
     
-    def update_email(self, index: int, email: str):
+    def update_email(self, index: int, email: str, email_col_idx=None):
         """
         Updates the email in specified row
         
         Args:
             index: Row index
             email: New email address
+            email_col_idx: Column index (for numeric columns), None uses named column
         """
         if self.df is None:
             raise ValueError("Call read_excel() method first")
         
-        email_col = EXCEL_COLUMNS['email']
-        self.df.at[index, email_col] = email
+        if email_col_idx is not None:
+            # Numeric column mode
+            self.df.iat[index, email_col_idx] = email
+        else:
+            # Named column mode
+            email_col = EXCEL_COLUMNS['email']
+            self.df.at[index, email_col] = email
+        
         logger.debug(f"Row {index} email updated: {email}")

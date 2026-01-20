@@ -306,14 +306,8 @@ class EmailScraperGUI:
             total_not_found = 0
             total_processed = 0
             
-            # Calculate total rows once
-            total_rows = 0
-            for sn in sheet_names:
-                temp_handler = ExcelHandler(self.input_file)
-                temp_df = temp_handler.read_excel(sheet_name=sn)
-                total_rows += len(temp_df)
-            
-            logger.info(f"Total rows (all sheets): {total_rows}\n")
+            # Calculate total rows once (skip this - too slow for large files)
+            # Just process each sheet as we go
             
             for sheet_idx, sheet_name in enumerate(sheet_names, 1):
                 if not self.is_running:
@@ -323,83 +317,92 @@ class EmailScraperGUI:
                 logger.info(f"SHEET {sheet_idx}/{len(sheet_names)}: {sheet_name}")
                 logger.info(f"{'='*60}")
                 
-                # Read sheet
-                df = excel_handler.read_excel(sheet_name=sheet_name)
-                
-                # Create handler for this sheet
-                sheet_handler = ExcelHandler(self.input_file)
-                sheet_handler.read_excel(sheet_name=sheet_name)
-                
-                # Get websites
-                websites = sheet_handler.get_websites()
-                
-                if not websites:
-                    logger.info(f"All emails present in '{sheet_name}', skipping...")
-                    all_sheets_data[sheet_name] = sheet_handler.df
-                    continue
-                
-                logger.info(f"\nSearching emails for {len(websites)} companies...\n")
-                
-                # Create web scraper
-                scraper = WebScraper()
-                
-                sheet_found = 0
-                sheet_not_found = 0
-                
-                # Search email for each website
-                for i, site_info in enumerate(websites, 1):
-                    if not self.is_running:
-                        break
+                try:
+                    # Read sheet with structure preservation
+                    sheet_handler = ExcelHandler(self.input_file)
+                    df = sheet_handler.read_excel(sheet_name=sheet_name, preserve_structure=True)
                     
-                    company = site_info['company']
-                    website = site_info['website']
-                    index = site_info['index']
+                    # Get websites
+                    websites = sheet_handler.get_websites(detect_header=True)
                     
-                    logger.info(f"[{i}/{len(websites)}] {company}")
-                    logger.info(f"    {website}")
+                    if not websites:
+                        logger.info(f"All emails present in '{sheet_name}', skipping...")
+                        all_sheets_data[sheet_name] = sheet_handler.df
+                        continue
                     
-                    # Update progress
-                    total_processed += 1
-                    self.update_progress(
-                        i, 
-                        len(websites),
-                        f"[Sheet {sheet_idx}/{len(sheet_names)}] {company[:30]}..."
-                    )
+                    logger.info(f"\nSearching emails for {len(websites)} companies...\n")
                     
-                    try:
-                        # Find email
-                        email = scraper.scrape_website(website)
+                    # Create web scraper
+                    scraper = WebScraper()
+                
+                    sheet_found = 0
+                    sheet_not_found = 0
+                
+                    # Search email for each website
+                    for i, site_info in enumerate(websites, 1):
+                        if not self.is_running:
+                            break
                         
-                        if email:
-                            logger.info(f"    Found: {email}\n")
-                            sheet_handler.update_email(index, email)
-                            sheet_found += 1
-                            total_found += 1
-                        else:
-                            logger.info(f"    Not found\n")
+                        company = site_info['company']
+                        website = site_info['website']
+                        index = site_info['index']
+                        email_col_idx = site_info.get('email_col_idx')
+                        
+                        # Limit company name display
+                        display_company = company[:50] if company and company != 'nan' else 'Unknown Company'
+                    
+                        logger.info(f"[{i}/{len(websites)}] {display_company}")
+                        logger.info(f"    {website}")
+                        
+                        # Update progress
+                        total_processed += 1
+                        self.update_progress(
+                            i, 
+                            len(websites),
+                            f"[Sheet {sheet_idx}/{len(sheet_names)}] {display_company[:30]}..."
+                        )
+                        
+                        try:
+                            # Find email
+                            email = scraper.scrape_website(website)
+                            
+                            if email:
+                                logger.info(f"    Found: {email}\n")
+                                sheet_handler.update_email(index, email, email_col_idx=email_col_idx)
+                                sheet_found += 1
+                                total_found += 1
+                            else:
+                                logger.info(f"    Not found\n")
+                                sheet_not_found += 1
+                                total_not_found += 1
+                            
+                            self.stats['found'] = total_found
+                            self.stats['not_found'] = total_not_found
+                            self.stats['total'] = total_found + total_not_found
+                            self.update_stats()
+                            
+                        except Exception as e:
+                            logger.error(f"    Error: {e}\n")
                             sheet_not_found += 1
                             total_not_found += 1
-                        
-                        self.stats['found'] = total_found
-                        self.stats['not_found'] = total_not_found
-                        self.stats['total'] = total_found + total_not_found
-                        self.update_stats()
-                        
-                    except Exception as e:
-                        logger.error(f"    Error: {e}\n")
-                        sheet_not_found += 1
-                        total_not_found += 1
-                        self.stats['not_found'] = total_not_found
-                        self.stats['total'] = total_found + total_not_found
-                        self.update_stats()
-                
-                # Sheet summary
-                logger.info(f"\n'{sheet_name}' Summary:")
-                logger.info(f"   Found: {sheet_found}")
-                logger.info(f"   Not found: {sheet_not_found}")
-                
-                # Save sheet
-                all_sheets_data[sheet_name] = sheet_handler.df
+                            self.stats['not_found'] = total_not_found
+                            self.stats['total'] = total_found + total_not_found
+                            self.update_stats()
+                    
+                    # Sheet summary
+                    logger.info(f"\n'{sheet_name}' Summary:")
+                    logger.info(f"   Found: {sheet_found}")
+                    logger.info(f"   Not found: {sheet_not_found}")
+                    
+                    # Save sheet data
+                    all_sheets_data[sheet_name] = sheet_handler.df
+                    
+                except Exception as sheet_error:
+                    logger.error(f"Error processing sheet '{sheet_name}': {sheet_error}")
+                    import traceback
+                    traceback.print_exc()
+                    # Continue with next sheet instead of stopping
+                    continue
             
             if self.is_running:
                 # Save results
