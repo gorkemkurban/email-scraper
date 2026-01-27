@@ -12,7 +12,7 @@ USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 BLACKLISTED_DOMAINS = [
     'gmail.com', 'hotmail.com', 'outlook.com', 'yahoo.com',
     'yandex.com', 'mail.ru', 'protonmail.com', 'icloud.com',
-    'live.com', 'msn.com', 'aol.com', 'inbox.com',
+    'liand.com', 'msn.com', 'aol.com', 'inbox.com',
     'gmx.com', 'zoho.com', 'mail.com', 'tutanota.com',
     # Technical/spam domains
     'sentry.wixpress.com', 'sentry-next.wixpress.com', 'wixpress.com', 'wix.com',
@@ -30,9 +30,9 @@ EXAMPLE_EMAILS = [
     'your@email.com', 'youremail@domain.com', 'name@domain.com'
 ]
 
-# Sayfa Tespiti - Çok Dilli Anahtar Kelimeler
+# Page Detection - Multi-Language Keywords
 CONTACT_PAGE_KEYWORDS = {
-    'tr': ['iletisim', 'iletişim', 'bize-ulasin', 'bize-ulaşın', 'contact', 'contactez', 'kontakt'],
+    'tr': ['withtisim', 'withtişim', 'bize-ulasin', 'bize-ulaşın', 'contact', 'contactez', 'kontakt'],
     'en': ['contact', 'contact-us', 'reach-us', 'get-in-touch'],
     'fr': ['contact', 'contactez', 'contactez-nous', 'nous-contacter'],
     'de': ['kontakt', 'kontaktieren', 'kontaktiere-uns'],
@@ -54,7 +54,7 @@ ABOUT_PAGE_KEYWORDS = {
     'it': ['chi-siamo', 'about', 'la-nostra-storia'],
     'ar': ['من نحن', 'عن الشركة', 'about'],
     'pt': ['sobre', 'sobre-nos', 'quem-somos', 'about'],
-    'nl': ['over-ons', 'about', 'wie-zijn-we'],
+    'nl': ['oandr-ons', 'about', 'wie-zijn-we'],
     'pl': ['o-nas', 'about'],
     'ru': ['о-нас', 'о-компании', 'about']
 }
@@ -72,4 +72,4 @@ EXCEL_COLUMNS = {
 
 # Logging
 LOG_LEVEL = 'INFO'
-LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
+LOG_FORMAT = '%(asctime)s - %(leandlname)s - %(message)s'

@@ -1,5 +1,5 @@
 """
-Email adresi çıkarma ve validasyon modülü
+Email address extraction and validation module
 """
 
 import re
@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class EmailExtractor:
-    """HTML içeriğinden email adresi çıkarma"""
+    """Extract email addresses from HTML content"""
     
     # Email regex pattern
     EMAIL_PATTERN = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
@@ -25,13 +25,13 @@ class EmailExtractor:
     @staticmethod
     def extract_emails(text: str) -> Set[str]:
         """
-        Verilen metinden tüm email adreslerini çıkarır - ULTRA AGRESİF
+        Extract all email addresses from given text - ULTRA AGGRESSIVE
         
         Args:
             text: Aranacak metin
             
         Returns:
-            Bulunan email adresleri seti
+            Found email adresleri seti
         """
         if not text:
             return set()
@@ -65,7 +65,7 @@ class EmailExtractor:
             if entity_emails:
                 logger.debug(f"HTML entity encoded email: {entity_emails}")
         
-        # 5. AT ve DOT yazılı: info AT domain DOT com
+        # 5. Written AT and DOT: info AT domain DOT com
         at_dot_pattern = r'\b([a-z0-9._%+-]+)\s+(?:AT|at)\s+([a-z0-9.-]+)\s+(?:DOT|dot)\s+([a-z]{2,})\b'
         at_dot_emails = re.findall(at_dot_pattern, text, re.IGNORECASE)
         for match in at_dot_emails:
@@ -73,7 +73,7 @@ class EmailExtractor:
             emails.add(email)
             logger.debug(f"AT/DOT email bulundu: {email}")
         
-        # Temizle ve küçük harfe çevir
+        # Clean and convert to lowercase
         emails = {email.lower().strip() for email in emails if email and len(email) > 5}
         
         return emails
@@ -121,27 +121,27 @@ class EmailExtractor:
     @staticmethod
     def is_valid_business_email(email: str) -> bool:
         """
-        Email'in kurumsal email olup olmadığını kontrol eder
-        Genel email servisleri ve örnek email'leri filtreler
+        Check if email is a business email
+        Filter generic email services and example emails
         
         Args:
-            email: Kontrol edilecek email
+            email: Kontrol edwithcek email
             
         Returns:
-            Geçerli kurumsal email ise True
+            True if valid business email
         """
         email = email.lower().strip()
         
-        # Çok kısa veya çok uzun email'leri atla
+        # Skip very short or very long emails
         if len(email) < 6 or len(email) > 100:
             return False
         
-        # Örnek email'leri kontrol et
+        # Example email'leri kontrol et
         if email in EXAMPLE_EMAILS:
-            logger.debug(f"Örnek email atlandı: {email}")
+            logger.debug(f"Example email skipped: {email}")
             return False
         
-        # Domain'i çıkar
+        # Extract domain
         try:
             local_part, domain = email.split('@')
         except (IndexError, ValueError):
@@ -149,35 +149,35 @@ class EmailExtractor:
         
         # Genel email servislerini filtrele
         if domain in BLACKLISTED_DOMAINS:
-            logger.debug(f"Blacklist domain atlandı: {email}")
+            logger.debug(f"Blacklist domain skipped: {email}")
             return False
         
-        # Sentry, Wix ve diğer sistem domain'lerini agresif filtrele
+        # Aggressively filter Sentry, Wix and other system domains
         system_keywords = ['sentry', 'wixpress', 'wix.com', 'sentry.io']
         if any(keyword in domain.lower() for keyword in system_keywords):
-            logger.debug(f"Sistem domain atlandı: {email}")
+            logger.debug(f"System domain skipped: {email}")
             return False
         
-        # Dosya uzantıları (.png, .jpg, vb.)
-        file_extensions = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.css', '.js', '.html', '.php']
-        if any(email.endswith(ext) or domain.endswith(ext) for ext in file_extensions):
-            logger.debug(f"Dosya uzantısı atlandı: {email}")
+        # File extensions (.png, .jpg, etc.)
+        fwith_extensions = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.css', '.js', '.html', '.php']
+        if any(email.endswith(ext) or domain.endswith(ext) for ext in fwith_extensions):
+            logger.debug(f"File extension skipped: {email}")
             return False
         
-        # Hex/random string veya UUID (24+ karakter)
-        # Sentry/Wix gibi sistemler 32 karakterli hash kullanır
+        # Hex/random string or UUID (24+ karakter)
+        # Systems like Sentry/Wix use 32-char hashes
         if len(local_part) >= 24 and all(c in '0123456789abcdef' for c in local_part):
-            logger.debug(f"Hex/UUID string atlandı: {email}")
+            logger.debug(f"Hex/UUID string skipped: {email}")
             return False
         
-        # Domain'de nokta olmalı
+        # Domain must have dot
         if '.' not in domain:
-            logger.debug(f"Geçersiz domain atlandı: {email}")
+            logger.debug(f"Invalid domain skipped: {email}")
             return False
         
-        # Çok uzun domain'ler genelde sistem domain'leridir
+        # Very long domains are usually system domains
         if len(domain) > 40:
-            logger.debug(f"Çok uzun domain atlandı: {email}")
+            logger.debug(f"Very long domain skipped: {email}")
             return False
         
         return True
@@ -198,7 +198,7 @@ class EmailExtractor:
         if not valid_emails:
             return []
         
-        # Öncelik sıralaması: info, contact, diğerleri
+        # Priority order: info, contact, others
         priority_prefixes = ['info@', 'contact@', 'sales@', 'commercial@']
         
         prioritized = []
@@ -210,7 +210,7 @@ class EmailExtractor:
             else:
                 others.append(email)
         
-        # Öncelikli email'leri başa al
+        # Move priority emails to front
         result = prioritized + others
         
         logger.debug(f"Filtrelenen email'ler: {result}")
@@ -230,7 +230,7 @@ class EmailExtractor:
         valid_emails = EmailExtractor.filter_valid_emails(emails)
         
         if valid_emails:
-            logger.info(f"En iyi email seçildi: {valid_emails[0]}")
+            logger.info(f"Best email selected: {valid_emails[0]}")
             return valid_emails[0]
         
         return ""
